@@ -7,16 +7,21 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 // Load environment variables
 require('dotenv').config();
 
-// AWS S3 configuration
-const s3 = new AWS.S3({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION
-});
+// AWS S3 configuration with validation
+let s3 = null;
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_REGION && process.env.AWS_BUCKET_NAME) {
+    s3 = new AWS.S3({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION
+    });
+} else {
+    console.warn("AWS S3 is not properly configured. Skipping S3 upload.");
+}
 
 // Azure Blob Storage configuration with validation
-let blobServiceClient;
-let containerClient;
+let blobServiceClient = null;
+let containerClient = null;
 
 if (process.env.AZURE_STORAGE_CONNECTION_STRING && process.env.AZURE_CONTAINER_NAME) {
     try {
@@ -25,6 +30,8 @@ if (process.env.AZURE_STORAGE_CONNECTION_STRING && process.env.AZURE_CONTAINER_N
     } catch (err) {
         console.error("Error configuring Azure Blob Service:", err.message);
     }
+} else {
+    console.warn("Azure Blob Storage is not properly configured. Skipping Azure upload.");
 }
 
 // Multer configuration for local storage
@@ -41,6 +48,10 @@ const upload = multer({ storage: storage }).single('image');
 
 // Function to upload to AWS S3
 const uploadToS3 = (file) => {
+    if (!s3) {
+        throw new Error("AWS S3 is not configured.");
+    }
+
     const fileContent = fs.readFileSync(file.path);
     const params = {
         Bucket: process.env.AWS_BUCKET_NAME,
@@ -54,14 +65,15 @@ const uploadToS3 = (file) => {
 // Function to upload to Azure Blob Storage
 const uploadToAzure = async (file) => {
     if (!containerClient) {
-        throw new Error("Azure Blob Storage is not configured properly.");
+        throw new Error("Azure Blob Storage is not configured.");
     }
+
     const blockBlobClient = containerClient.getBlockBlobClient(file.filename);
     await blockBlobClient.uploadFile(file.path);
     return `https://${blobServiceClient.accountName}.blob.core.windows.net/${process.env.AZURE_CONTAINER_NAME}/${file.filename}`;
 };
 
-// Graceful error handling for upload image
+// Graceful error handling for uploading an image
 exports.uploadImage = async (req, res) => {
     try {
         upload(req, res, async (err) => {
@@ -82,14 +94,22 @@ exports.uploadImage = async (req, res) => {
             try {
                 // Upload to S3
                 if (process.env.UPLOAD_DEST === 's3' || process.env.UPLOAD_DEST === 'both') {
-                    const s3Response = await uploadToS3(req.file);
-                    uploadResponse.push({ destination: 's3', url: s3Response.Location });
+                    if (s3) {
+                        const s3Response = await uploadToS3(req.file);
+                        uploadResponse.push({ destination: 's3', url: s3Response.Location });
+                    } else {
+                        console.warn("S3 upload was requested, but AWS S3 is not properly configured.");
+                    }
                 }
 
                 // Upload to Azure
                 if (process.env.UPLOAD_DEST === 'azure' || process.env.UPLOAD_DEST === 'both') {
-                    const azureBlobUrl = await uploadToAzure(req.file);
-                    uploadResponse.push({ destination: 'azure', url: azureBlobUrl });
+                    if (containerClient) {
+                        const azureBlobUrl = await uploadToAzure(req.file);
+                        uploadResponse.push({ destination: 'azure', url: azureBlobUrl });
+                    } else {
+                        console.warn("Azure upload was requested, but Azure Blob Storage is not properly configured.");
+                    }
                 }
 
                 // If neither s3 nor azure, upload locally
