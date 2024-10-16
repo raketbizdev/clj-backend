@@ -16,39 +16,39 @@ const storage = multer.diskStorage({
 
 // File filter to check for image files
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png/;
-  const extName = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimeType = allowedTypes.test(file.mimetype);
+    const allowedTypes = /jpeg|jpg|png/;
+    const extName = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimeType = allowedTypes.test(file.mimetype);
 
-  if (extName && mimeType) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only images are allowed (jpeg, jpg, png).'));
-  }
+    if (extName && mimeType) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only images are allowed (jpeg, jpg, png).'));
+    }
 };
 
 // Configure multer with error handling
 const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter
+    storage: storage,
+    fileFilter: fileFilter
 }).single('image');
 
 // Upload image route with error handling
 router.post('/upload', (req, res, next) => {
-  upload(req, res, (err) => {
-    if (err instanceof multer.MulterError) {
-      return res.status(400).json({
-        type: 'MulterError',
-        message: err.message
-      });
-    } else if (err) {
-      return res.status(400).json({
-        type: 'FileValidationError',
-        message: err.message
-      });
-    }
-    next();
-  });
+    upload(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            return res.status(400).json({
+                type: 'MulterError',
+                message: err.message
+            });
+        } else if (err) {
+            return res.status(400).json({
+                type: 'FileValidationError',
+                message: err.message
+            });
+        }
+        next();
+    });
 }, imageController.uploadImage);
 
 // List all uploaded images
