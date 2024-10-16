@@ -25,8 +25,8 @@ Ensure you have the following installed:
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/your-repo/image-uploader-api.git
-cd image-uploader-api
+git clone https://github.com/your-repo/clj-backend.git
+cd clj-backend
 ```
 
 ### Step 2: Install Dependencies
